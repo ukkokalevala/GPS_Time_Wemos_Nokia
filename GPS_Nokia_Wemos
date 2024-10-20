@@ -1,0 +1,97 @@
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h>
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+
+// Nokia 5110 display pins
+#define CLK D1
+#define DIN D2
+#define DC  D5
+#define CE  D6
+#define RST D7
+
+// GPS module connections (Wemos D1 Mini)
+#define GPS_RX D3  // Connect to GPS TX pin
+#define GPS_TX D4  // Connect to GPS RX pin
+
+// Initialize Nokia 5110 display
+Adafruit_PCD8544 display = Adafruit_PCD8544(CLK, DIN, DC, CE, RST);
+
+// Initialize SoftwareSerial for GPS communication
+SoftwareSerial ss(GPS_RX, GPS_TX);  // RX, TX for GPS
+TinyGPSPlus gps;  // Using TinyGPS++ for parsing GPS data
+
+int timezone = 2;  // Set the timezone (UTC+2)
+unsigned long lastUpdateTime = 0;  // For tracking display updates
+
+void setup() {
+  // Start serial communication for debugging
+  Serial.begin(115200);
+
+  // Start the GPS module communication
+  ss.begin(9600);
+
+  // Initialize Nokia 5110 display
+  display.begin();
+  display.setContrast(50);  // Set contrast for better readability
+  display.setRotation(2);   // Rotate the display by 180 degrees
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Waiting for GPS...");
+  display.display();  // Show initial message
+
+  // Debugging output
+  Serial.println("GPS clock starting up...");
+}
+
+void loop() {
+  // Continuously read data from GPS module
+  while (ss.available() > 0) {
+    char c = ss.read();
+    gps.encode(c);  // Decode the data sent by the GPS
+  }
+
+  // Only update display if at least 1 second has passed
+  if (millis() - lastUpdateTime >= 1000) {
+    lastUpdateTime = millis();  // Reset the update timer
+
+    // Check if the GPS has a valid location fix (i.e., has locked onto satellites)
+    if (gps.time.isValid()) {
+      displayTime();
+    } else {
+      // Display waiting message if no valid time data
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println("No valid time...");
+      display.display();
+    }
+  }
+}
+
+// Function to display the time on the Nokia 5110
+void displayTime() {
+  int hour = (gps.time.hour() + timezone) % 24;  // Adjust for timezone
+  int minute = gps.time.minute();
+  int second = gps.time.second();
+
+  display.clearDisplay();  // Clear the display for updating
+
+  // Display "Time:" label
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Time:");
+
+  // Display formatted time (HH:MM:SS)
+  display.setTextSize(1);
+  display.setCursor(0, 10);  // Set the cursor to a new line
+  if (hour < 10) display.print('0');  // Add leading zero for hour
+  display.print(hour);
+  display.print(":");
+  if (minute < 10) display.print('0');  // Add leading zero for minute
+  display.print(minute);
+  display.print(":");
+  if (second < 10) display.print('0');  // Add leading zero for second
+  display.print(second);
+  display.display();  // Refresh the display
+}
